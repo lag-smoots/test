@@ -1,0 +1,62 @@
+#!/bin/sh
+################################################################################
+# Filename: vcrypt.sh 
+# Description: This script allows a user to encrypt a vaible (or any other
+#              secret) at runtime and then use it, decrypted, within another
+#              script. This prevents shoulder surfing passwords and avoids
+#              storing the password in plain text, which could inadvertently
+#              be sent to or discovered by an individual at a later date.
+#
+# Author: MPE TEAM
+#
+# Usage: . ./vcrypt.sh
+################################################################################
+
+
+### Application Settings ###
+APP_NAME=$2
+
+### Input password as  ### 
+read -s -p "Enter Password: "  APP_PASS
+
+### VCRYPT Settings ###
+VCRYPT_DIR=$HOME/.vcd
+VCRYPT_KEYS_DIR=$VCRYPT_DIR/keys
+VCRYPT_FILES_DIR=$VCRYPT_DIR/secrets
+VCRYPT_GEN_KEY=$APP_NAME.key
+VCRYPT_GEN_PASS=$APP_NAME.password
+VCRYPT_PROFILE_FILE=".bash_vcryprt_profile"
+
+### Dependency Check for OpenSSL ###
+
+if [ ! -x "$(command -v openssl)" ]; then
+	echo "Error: OpenSSL is not installed or not accessible in the current path." \
+	"Please install it and try again." >&2
+	exit 1
+fi
+
+### Create VCRYPT directory structure ###
+
+mkdir -p $VCRYPT_DIR $VCRYPT_KEYS_DIR $VCRYPT_FILES_DIR
+
+
+### Generate a 2048-bit RSA key and store for variable file encryption ###
+openssl genrsa -out $VCRYPT_KEYS_DIR/$VCRYPT_GEN_KEY 2048
+
+
+### Encrypt Variable File ###
+echo $APP_PASS | openssl rsautl -inkey $VCRYPT_KEYS_DIR/$VCRYPT_GEN_KEY -encrypt >$VCRYPT_FILES_DIR/$VCRYPT_GEN_PASS
+
+
+### Set Varible for CLI usage ###
+cat <<EOF >> ${VCRYPT_DIR}/${VCRYPT_PROFILE_FILE}
+alias ${APP_NAME}_SECRET='openssl rsautl -inkey ${VCRYPT_KEYS_DIR}/${VCRYPT_GEN_KEY} -decrypt <${VCRYPT_FILES_DIR}/${VCRYPT_GEN_PASS}'
+EOF
+
+### Ensure PERMS are properly confired on directories and files ###
+chmod -R 700 $VCRYPT_DIR
+
+### Load VCRYPT Profiles ###
+#for APP in `ls ${VCRYPT_FILES_DIR} |awk -F. '{print $1}'`;do unalias ${APP}_SECRET; done
+#source ${VCRYPT_DIR}/${VCRYPT_PROFILE_FILE}
+alias ${APP_NAME}_SECRET='openssl rsautl -inkey ${VCRYPT_KEYS_DIR}/${VCRYPT_GEN_KEY} -decrypt <${VCRYPT_FILES_DIR}/${VCRYPT_GEN_PASS}'
